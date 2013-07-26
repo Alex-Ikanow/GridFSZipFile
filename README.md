@@ -1,8 +1,10 @@
-Modification of net.sf.jazzlib.ZipFile supporting GridFS-based files from MongoDB
+Modification of net.sf.jazzlib.ZipFile supporting MongoDB-GridFS-based ZIP files
 
 GPL2 with classpath exception (due to use of net.sf.jazzlib.ZipFile)
 
-When used in conjunction with the MongoDB java driver, provides a java.util.zip.ZipFile "interface" that backs directly onto a GridFS file.
+When used in conjunction with the MongoDB java driver, provides a java.util.zip.ZipFile "interface" that backs directly onto a GridFS-uploaded ZIP file.
+
+The GridFSRandomAccessFile can be also be used standalone, though it will not be that efficient in general cases because it doesn't cache chunks.
 
 USAGE:
 
