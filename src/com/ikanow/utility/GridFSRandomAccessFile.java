@@ -37,18 +37,22 @@ exception statement from your version. */
 
 package com.ikanow.utility;
 
+import java.io.ByteArrayOutputStream;
 import java.io.DataInput;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.Date;
+import java.util.Enumeration;
+import java.util.LinkedList;
+import java.util.zip.CRC32;
 
 import org.bson.types.ObjectId;
 
+import com.mongodb.MongoClient;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
-
-import net.sf.jazzlib.ZipException;
 
 /** NOT THREAD SAFE
  *  Don't consider any function tested unless it is closed with TESTED
@@ -72,6 +76,8 @@ public class GridFSRandomAccessFile implements DataInput {
 		DBCollection fileColl = db.getCollection(new StringBuffer(fsName).append(".files").toString());
 		_chunkCollection = db.getCollection(new StringBuffer(fsName).append(".chunks").toString());
 		
+		//TEST:System.out.println("GridFSRandomAccessFile1: "+_chunkCollection.getDB().getName()+"."+_chunkCollection.getName()+": "+fileId.toString());
+		
 		_chunkQuery = new BasicDBObject(_CHUNK_files_id_, fileId);
 		_chunkQuery.put(_CHUNK_n_, 0);
 		_fileObj = (BasicDBObject) fileColl.findOne(new BasicDBObject(_FILE_id_, fileId));
@@ -84,7 +90,9 @@ public class GridFSRandomAccessFile implements DataInput {
 		_lastChunkNum = (int) (_fileSize/_chunkSize);
 		_finalChunkSize = (int) (_fileSize % _chunkSize);
 		_currChunkSize = (_lastChunkNum == 0) ? _finalChunkSize : _chunkSize;
-	}//TOTEST
+		
+		//TEST:System.out.println("GridFSRandomAccessFile2: chunkSize="+_chunkSize+" fileSize="+_fileSize+" finalChunkSize="+_finalChunkSize+" currChunkSize="+_currChunkSize);
+	}//TESTED
 
 	////////////////////////////////////////////////
 	////////////////////////////////////////////////
@@ -96,6 +104,8 @@ public class GridFSRandomAccessFile implements DataInput {
 	 * @throws IOException
 	 */
 	public void seek(long pos) throws IOException {
+		//TEST:System.out.println("seek1: pos="+pos+" posInFile="+_currPosInFile);
+		
 		int skip = (int)(pos - _currPosInFile);
 		this.skipBytes(skip);
 	}//(tested skipBytes)
@@ -105,6 +115,8 @@ public class GridFSRandomAccessFile implements DataInput {
 	 */
 	@Override
 	public int skipBytes(int n) throws IOException {
+		//TEST:System.out.println("skipBytes1: "+n);
+		
 		long oldPosInFile = _currPosInFile;
 		_currPosInFile = _currPosInFile + n;
 		if (_currPosInFile < 0) {
@@ -121,6 +133,8 @@ public class GridFSRandomAccessFile implements DataInput {
 			if (null == newChunk) {
 				throw new IOException("Unknown I/O exception");
 			}
+			//TEST:System.out.println("skipBytes2: "+n+" currChunkNum="+_currChunkNum+"->"+newChunkNum+" posInFile="+_currPosInFile);
+			
 			_currChunkObj = newChunk;
 			_currChunkNum = newChunkNum;
 			_currData = (byte[]) newChunk.get(_CHUNK_data_); 					
@@ -129,14 +143,14 @@ public class GridFSRandomAccessFile implements DataInput {
 		_currPosInChunk = (int) (_currPosInFile % _chunkSize);
 		return (int) (_currPosInFile - oldPosInFile);		
 
-	}//TOTEST
+	}//TESTED (skipBytes1, skipBytes2)
 
 	/** returns the total length of the file
 	 * @return long, the total length of the file
 	 */
 	public long length() {
 		return _fileSize;
-	}//TOTEST
+	}//TESTED (from GridFSRandomAccessFile2)
 	
 	/** Reads from the file and updates its file position
 	 * @param b - byte[], the data block in which to write
@@ -164,7 +178,7 @@ public class GridFSRandomAccessFile implements DataInput {
 	public synchronized int read() throws IOException { // (reads 1B)
 		read(this._saved8Bytes, 0, 1);
 		return (int) _saved8Bytes[0];
-	}//TOTEST
+	}//TESTED (from full read + functional testing)
 	
 	/** Reads from the file and updates its file position
 	 * @param b - byte[], the data block in which to write
@@ -185,11 +199,17 @@ public class GridFSRandomAccessFile implements DataInput {
 	 */
 	public int read(byte[] b, int off, int len) throws IOException {
 		if ((_currPosInFile + len) > _fileSize) { // adjust len to fit in the file
+			//TEST:System.out.println("read1: len="+len+"->...");
 			len = (int) (_fileSize - _currPosInFile);
-		}
+		}//TOTEST
 		if (null == _currChunkObj) { // get data if none currently exists
 			skipBytes(0);
-		}
+			//TEST:System.out.println("read2: "+_currData.length);
+		}//TOTEST
+		
+		//TEST:System.out.println("read3a: len="+len+" currChunk="+_currChunkNum+" posInChunk="+_currPosInChunk+" posInFile="+_currPosInFile);
+		
+		int read = len;
 		while (len > 0) {
 			int toRead = len;
 			if (toRead > (_currChunkSize - _currPosInChunk)) {
@@ -198,13 +218,14 @@ public class GridFSRandomAccessFile implements DataInput {
 			for (int i = 0; i < toRead; ++i) { // read from one chunk
 				b[off + i] = _currData[_currPosInChunk + i];
 			}
+			off += toRead;
 			len -= toRead;
-			if (len > 0) { // get the next chunk if needed
-				skipBytes(toRead);
-			}
+			skipBytes(toRead);
+			
+			//TEST:System.out.println("read3b: len="+len+" toRead="+toRead+" currChunk="+_currChunkNum+" posInChunk="+_currPosInChunk+" posInFile="+_currPosInFile);
 		}
-		return len;
-	}//TOTEST
+		return read;
+	}//TESTED (except read1,read2)
 	
 	/**
 	 * Does nothing, up to the caller to close any MongoDB connections
@@ -330,10 +351,66 @@ public class GridFSRandomAccessFile implements DataInput {
 	
 	////////////////////////////////////////////////
 	////////////////////////////////////////////////
+	////////////////////////////////////////////////
+	////////////////////////////////////////////////
 	
 	//TEST CODE
 	
-	public static void main(String[] args) throws ZipException {
-	}
+	// Lazy test strategy:
+	// 1] Check functionally works by looking at names/lens/crcs of zip files
+	// 2] Check completeness with print statements: find/replace //$TEST: -> /*$TEST*/ (not $): and vice versa
 	
+	public static void main(String[] args) throws IOException {
+		
+		if (args.length < 4) {
+			System.out.println("usage: GridFSRandomAccessFile mongoip db_name fs_name id");
+			return;
+		}
+		
+		// Command line:
+		MongoClient mongoClient = new MongoClient(args[0]);
+		DB db = mongoClient.getDB(args[1]); 
+		String fsName = args[2];
+		ObjectId fileId = new ObjectId(args[3]);
+		
+		// Create zip:
+		GridFSRandomAccessFile shareAsFile = new GridFSRandomAccessFile(db, fsName, fileId);
+		net.sf.jazzlib.GridFSZipFile zipFile = new net.sf.jazzlib.GridFSZipFile("myfilename", shareAsFile);
+		
+		// Test logic:
+		LinkedList<net.sf.jazzlib.ZipEntry> savedEntries = new LinkedList<net.sf.jazzlib.ZipEntry>();
+		@SuppressWarnings("unchecked")
+		Enumeration<net.sf.jazzlib.ZipEntry> entries = zipFile.entries();
+		int nFilesToMatch = 0;
+		while (entries.hasMoreElements()) {
+			net.sf.jazzlib.ZipEntry zipInfo = entries.nextElement();
+			System.out.println("FILE: " + zipInfo.getName() + " , " + zipInfo.getSize());
+			savedEntries.add(zipInfo);
+			nFilesToMatch++;
+		}
+		byte[] tmpBuffer = new byte[1024];
+		int nFilesMatched = 0;
+		CRC32 crcGen = new CRC32();
+		for (net.sf.jazzlib.ZipEntry zipInfo: savedEntries) {
+			InputStream inStream = zipFile.getInputStream(zipInfo);
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			int nRead = 0;
+			while ((nRead = inStream.read(tmpBuffer)) != -1) out.write(tmpBuffer, 0, nRead);			
+			byte[] result = out.toByteArray();			
+			if (zipInfo.getSize() != result.length) {
+				System.out.println("FILE LEN MISMATCH: " + zipInfo.getName() + ": " + zipInfo.getSize() + " vs " + result.length);			
+				continue;
+			}
+			crcGen.reset();
+			crcGen.update(result);
+			if (crcGen.getValue() != zipInfo.getCrc()) {
+				System.out.println("FILE CRC MISMATCH: " + zipInfo.getName() + ": " + zipInfo.getSize() + " vs " + result.length);			
+				continue;				
+			}
+			nFilesMatched++;
+			out.close();
+			inStream.close();
+		}
+		System.out.println("Successfully validated: " + nFilesMatched + " vs " + nFilesToMatch);
+	}	
 }
