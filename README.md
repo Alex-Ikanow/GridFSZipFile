@@ -15,6 +15,8 @@ USAGE:
 		String fsName = "fs"; // (the default)
 		ObjectId fileId = new ObjectId("FILEID");
 		GridFSRandomAccessFile shareAsFile = new GridFSRandomAccessFile(db, fsName, fileId);
+		//or
+		//GridFSRandomAccessFile shareAsFile = new GridFSRandomAccessFile(new GridFS(db, fsName), fileId);
 		String dummyFilename = "CanBeAnythingYouWant";
 		net.sf.jazzlib.GridFSZipFile zipFile = new net.sf.jazzlib.GridFSZipFile(dummyFilename, shareAsFile);
 		

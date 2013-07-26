@@ -53,6 +53,7 @@ import com.mongodb.MongoClient;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
+import com.mongodb.gridfs.GridFS;
 
 /** NOT THREAD SAFE
  *  Don't consider any function tested unless it is closed with TESTED
@@ -66,7 +67,16 @@ public class GridFSRandomAccessFile implements DataInput {
 	
 	// CONSTRUCTOR
 	
-	/** Returns a random access file accessor from a database and FS name
+	/** Returns a random access file accessor from a GridFS and fileId
+	 * @param gridFS - com.mongodb.gridfs.GridFS - the MongoDB gridFS "collection"
+	 * @param fileId - org.bson.ObjectId, the _id of the file
+	 * @throws IOException
+	 */
+	public GridFSRandomAccessFile(GridFS gridFS, ObjectId fileId) throws IOException {
+		this(gridFS.getDB(), gridFS.getBucketName(), fileId);
+	}
+	
+	/** Returns a random access file accessor from a database, FS name, and fileId
 	 * @param db - com.mongodb.DB, the database name 
 	 * @param fsName - string, the "collection" name
 	 * @param fileId - org.bson.ObjectId, the _id of the file 
