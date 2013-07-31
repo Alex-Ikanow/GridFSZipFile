@@ -49,6 +49,7 @@ import java.util.zip.CRC32;
 
 import org.bson.types.ObjectId;
 
+import com.mongodb.DBObject;
 import com.mongodb.MongoClient;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DB;
@@ -90,13 +91,13 @@ public class GridFSRandomAccessFile implements DataInput {
 		
 		_chunkQuery = new BasicDBObject(_CHUNK_files_id_, fileId);
 		_chunkQuery.put(_CHUNK_n_, 0);
-		_fileObj = (BasicDBObject) fileColl.findOne(new BasicDBObject(_FILE_id_, fileId));
+		_fileObj = (DBObject) fileColl.findOne(new BasicDBObject(_FILE_id_, fileId));
 		if (null == _fileObj) {
 			throw new IOException("File Not Found");
 		}		
 		_fileId = fileId;
-		_chunkSize = _fileObj.getInt(_FILE_chunkSize_);
-		_fileSize = _fileObj.getLong(_FILE_length_);
+		_chunkSize = ((Number)_fileObj.get(_FILE_chunkSize_)).intValue();
+		_fileSize = ((Number)_fileObj.get(_FILE_length_)).longValue();
 		_lastChunkNum = (int) (_fileSize/_chunkSize);
 		_finalChunkSize = (int) (_fileSize % _chunkSize);
 		_currChunkSize = (_lastChunkNum == 0) ? _finalChunkSize : _chunkSize;
@@ -328,7 +329,7 @@ public class GridFSRandomAccessFile implements DataInput {
 	protected DBCollection _chunkCollection = null;
 	
 	// Cached attributes from file:
-	protected BasicDBObject _fileObj = null;
+	protected DBObject _fileObj = null;
 	protected int _chunkSize;
 	protected int _lastChunkNum;
 	protected long _fileSize;
